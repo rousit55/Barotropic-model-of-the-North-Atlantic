@@ -1,0 +1,143 @@
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+
+# constants
+H = 4000
+g = 10
+L = 5 * 10 ** 6
+cmax = 200
+den = 1025
+t0 = 0.1
+
+omega = (2 * math.pi) / 86400
+b = 2.29 * (10 ** -11)
+k = 10 ** -5
+f10 = 2 * omega * np.sin((2 * math.pi) / 36)
+f35 = 2 * omega * np.sin((2 * math.pi) * 35 / 360)
+f60 = 2 * omega * np.sin((2 * math.pi) / 6)
+f0 = 10 ** -5
+# meshgrid
+im = 100;
+jm = 100;
+dx = L / jm
+dy = L / im
+# cfl
+dtmax = dx / cmax
+dt = dtmax / 3
+dt = round(dt, -1)
+tmax = 1*1080
+# wind stress
+tx = np.zeros((im, 1))
+for i in range(0, im):
+    tx[i, 0] = -t0 * np.cos((np.pi) * i / im)
+# fplane-bplane
+bplane = True
+f = np.zeros((im, 1))
+if bplane:
+    for i in range(0, im):
+        f[i, 0] = f10 + b * (i - 1) * dy
+else:
+    f[:, 0] = f0
+friction = False
+if friction:
+    k = 0
+   
+   
+ub = np.zeros((im + 1, jm + 1))  # back
+un = np.zeros((im + 1, jm + 1))  # now
+u = np.zeros((im + 1, jm + 1))  # forecast
+vb = np.zeros((im + 1, jm + 1))  # back
+vn = np.zeros((im + 1, jm + 1))  # now
+v = np.zeros((im + 1, jm + 1))  # forecast
+nb = np.zeros((im, jm))  # back
+nn = np.zeros((im, jm))  # now
+n = np.zeros((im, jm))  # forecast
+
+ke = np.zeros((im, jm))
+kmn =[]
+Leapfrog = True
+if Leapfrog:
+    def mlp():
+        global un, ub, vn, vb, nn, nb, kemean
+        for i in range(0, im):
+            for j in range(1, jm):
+                u[i, j] = ub[i, j] + 2 * dt * (
+                            f[i, 0] * (vn[i + 1, j - 1] + vn[i + 1, j] + vn[i, j - 1] + vn[i, j]) / 4 - g * (
+                                nn[i, j] - nn[i, j - 1]) / dx +
+                            tx[i, 0] / (den * H) - k * un[i, j])
+        for i in range(1, im):
+            for j in range(1, jm):
+                v[i, j] = vb[i, j] - 2 * dt * (
+                            f[i, 0] * (un[i - 1, j] + un[i - 1, j + 1] + un[i, j + 1] + un[i, j]) / 4 + g * (
+                                nn[i, j] - nn[i - 1, j]) / dy -
+                            k * vn[i, j])
+        for i in range(1, im):
+            for j in range(1, jm):
+                n[i, j] = nb[i, j] - 2 * dt * H * ((un[i, j + 1] - un[i, j]) / dx + (v[i + 1, j] - v[i, j]) /
+dy)
+        for i in range(1, im - 1):
+            for j in range(1, jm - 1):
+                ke[i, j] = (0.5 / (im * jm)) * (np.sqrt(u[i, j] ** 2 + v[i, j] ** 2)) ** 2
+        kemean = ke.mean(0) 
+        kemean = kemean.mean(0) 
+
+else:
+    def mlp():
+        global un, ub, vn, vb, nn, nb
+        for i in range(0, im):
+            for j in range(1, jm):
+                u[i, j] = un[i, j] + dt * (
+                            f[i, 0] * (vn[i + 1, j - 1] + vn[i + 1, j] + vn[i, j - 1] + vn[i, j]) / 4 - g * (
+                                nn[i, j] - nn[i, j - 1]) / dx +
+                            tx[i, 0] / (den * H) - k * un[i, j])
+        for i in range(1, im):
+            for j in range(1, jm):
+                v[i, j] = vn[i, j] - dt * (
+                            f[i, 0] * (un[i - 1, j] + un[i - 1, j + 1] + un[i, j + 1] + un[i, j]) / 4 + g * (
+                                nn[i, j] - nn[i - 1, j]) / dy -
+                            k * vn[i, j])
+        for i in range(1, im):
+            for j in range(1, jm):
+                n[i, j] = nn[i, j] - dt * H * ((un[i, j + 1] - un[i, j]) / dx + (v[i + 1, j] - v[i, j]) / dy)  
+
+               
+               
+               
+for t in range(tmax):
+    mlp()
+    print(t)
+    u = un;
+    un = ub;
+    v = vn;
+    vn = vb;
+    n = nn;
+    nn = nb;
+    kmn.append(kemean)
+
+plt.plot(kmn)
+plt.title('Kinetic energy day  (J)')
+tick_positions = [ 270, 540,810,1080]
+tick_labels = ['6', '12', '18' , '24']
+plt.xticks(ticks=tick_positions, labels=tick_labels, \
+                       rotation=45, ha= 'right')
+plt.xlabel(&quot;hours&quot;)
+plt.savefig(&#39;Kinetic Energy day 1 bplane with friction&#39;)
+
+plt.show()
+
+step = 4
+x_coords = np.arange(0, 101, step)
+y_coords = np.arange(0, 101, step)
+x_mesh, y_mesh = np.meshgrid(x_coords, y_coords)
+
+plt.figure(figsize = (12, 6))
+ax = plt.subplot()
+ax.set_title('Velocity and ssh')
+im1 = plt.contourf (np.arange(0, 100, step), np.arange(0, 100, step), n[::step, ::step],
+cmap = 'Blues')
+plt.quiver(x_mesh, y_mesh, u[::step, ::step], v[::step, ::step], scale = 0.1, scale_units
+= 'width')
+plt.colorbar(im1, label = '(m)')
+plt.savefig('')
+plt.show()
